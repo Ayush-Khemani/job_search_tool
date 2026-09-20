@@ -5,6 +5,7 @@ cases are preserved for the OpenAI evaluation stage, where the full candidate
 profile and complete JD can be considered together.
 """
 import re
+from datetime import datetime, timezone, timedelta
 import yaml
 
 FILTERS_CONFIG_PATH = "filters.yaml"
@@ -23,6 +24,7 @@ EXCLUSION_KEYWORDS = _config["exclusion_keywords"]
 SENIORITY_EXCLUSION_KEYWORDS = _config.get("seniority_exclusion_keywords", [])
 SENIORITY_PREFERRED_KEYWORDS = _config.get("seniority_preferred_keywords", [])
 MAX_REQUIRED_YEARS = int(_config.get("max_required_years", 3))
+MAX_POST_AGE_DAYS = int(_config.get("max_post_age_days", 14))
 LOCATION_ALLOW_PATTERNS = _config["location_allow_patterns"]
 STACK_DEALBREAKERS = _config["stack_dealbreakers"]
 STACK_CORE = _config["stack_core"]
@@ -131,6 +133,37 @@ def experience_requirement_is_allowed(description: str) -> bool:
     return years is None or years <= MAX_REQUIRED_YEARS
 
 
+def _parse_posted_at(value) -> datetime | None:
+    if value is None or value == "":
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            # Lever uses epoch milliseconds.
+            seconds = float(value) / 1000.0 if float(value) > 10_000_000_000 else float(value)
+            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+        text = str(value).strip()
+        if text.isdigit():
+            number = int(text)
+            seconds = number / 1000.0 if number > 10_000_000_000 else number
+            return datetime.fromtimestamp(seconds, tz=timezone.utc)
+        normalized = text.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def posted_at_is_fresh(posted_at, now: datetime | None = None) -> bool:
+    """Reject only when the source gave us a parseable date that is too old."""
+    dt = _parse_posted_at(posted_at)
+    if dt is None:
+        return True
+    now = now or datetime.now(timezone.utc)
+    return dt >= now - timedelta(days=MAX_POST_AGE_DAYS)
+
+
 def jd_stack_mismatch(description: str) -> bool:
     text = strip_html(description)
     if not text:
@@ -144,6 +177,8 @@ def passes_filters(job: dict) -> bool:
     if not title_is_relevant(job.get("title", "")):
         return False
     if not location_is_allowed(job.get("location", "")):
+        return False
+    if not posted_at_is_fresh(job.get("posted_at")):
         return False
     description = job.get("description", "")
     if not experience_requirement_is_allowed(description):
