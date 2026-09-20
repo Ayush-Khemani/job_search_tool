@@ -252,11 +252,14 @@ def fetch_adzuna(params: dict) -> list[dict]:
 
     params = dict(params)  # don't mutate the caller's dict (reused across runs)
     max_pages = params.pop("max_pages", 5)
+    country = str(params.pop("country", "de")).lower().strip()
+    if not re.fullmatch(r"[a-z]{2}", country):
+        raise ValueError(f"Invalid Adzuna country code: {country!r}")
     results_per_page = params.get("results_per_page", 50)
 
     jobs = []
     for page in range(1, max_pages + 1):
-        url = f"https://api.adzuna.com/v1/api/jobs/ca/search/{page}"
+        url = f"https://api.adzuna.com/v1/api/jobs/{country}/search/{page}"
         query = {
             "app_id": app_id,
             "app_key": app_key,
@@ -310,6 +313,51 @@ def fetch_adzuna(params: dict) -> list[dict]:
     return jobs
 
 
+def fetch_arbeitnow(params: dict) -> list[dict]:
+    """Fetch recent Europe-focused jobs from Arbeitnow's public API.
+
+    Arbeitnow aggregates roles from several ATS families common in Europe,
+    including Greenhouse, SmartRecruiters, JOIN, Teamtailor and Recruitee.
+    No API key is required. We page conservatively and still run every result
+    through the same title/location/seniority/stack filters downstream.
+    """
+    params = dict(params)
+    max_pages = int(params.pop("max_pages", 5))
+    jobs = []
+
+    for page in range(1, max_pages + 1):
+        resp = httpx.get(
+            "https://www.arbeitnow.com/api/job-board-api",
+            params={**params, "page": page},
+            headers={"User-Agent": USER_AGENT},
+            timeout=TIMEOUT,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        rows = payload.get("data", [])
+        if not rows:
+            break
+
+        for j in rows:
+            location = j.get("location") or ""
+            if j.get("remote") and "remote" not in location.lower():
+                location = f"Remote ({location})" if location else "Remote Europe"
+            jobs.append({
+                "company": j.get("company_name", "Unknown"),
+                "title": j.get("title", ""),
+                "location": location,
+                "url": j.get("url", ""),
+                "posted_at": j.get("created_at"),
+                "description": j.get("description", ""),
+            })
+
+        links = payload.get("links") or {}
+        if not links.get("next"):
+            break
+
+    return jobs
+
+
 def fetch_remotive(params: dict) -> list[dict]:
     url = "https://remotive.com/api/remote-jobs"
     resp = httpx.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
@@ -331,6 +379,7 @@ def fetch_remotive(params: dict) -> list[dict]:
 
 FETCHERS = {
     "adzuna": fetch_adzuna,
+    "arbeitnow": fetch_arbeitnow,
     "remotive": fetch_remotive,
 }
 
