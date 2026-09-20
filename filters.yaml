@@ -1,144 +1,203 @@
-# Deterministic pre-filter rules, read by app/filters.py. Edit these lists
-# directly as you refine what "in scope" means for you — no code changes
-# needed. See app/filters.py's module docstring for how they're applied.
+# Ayush-specific deterministic pre-filter rules.
+# These filters are intentionally conservative: cheap hard rejections happen
+# before any OpenAI call, while ambiguous cases are left for AI evaluation.
 
-# Unambiguous engineering-role title signals. If the title matches one of
-# these, it's kept regardless of exclusion_keywords below — e.g. "Software
-# Engineer, Automated Marketing" shouldn't get dropped just because
-# "marketing" is also in exclusion_keywords. Keep this list short and
-# genuinely unambiguous (don't add anything from title_allow_keywords
-# that's also ambiguous, like bare "engineer" or "platform").
 priority_title_keywords:
+  - "junior software engineer"
+  - "junior software developer"
+  - "graduate software engineer"
+  - "graduate developer"
+  - "backend engineer"
+  - "backend developer"
+  - "back-end engineer"
+  - "full stack engineer"
+  - "full-stack engineer"
+  - "fullstack engineer"
   - "software engineer"
   - "software developer"
-  - "developer"
-  - "full stack"
-  - "fullstack"
-  - "full-stack"
 
-# Title must match at least one of these to be considered at all.
 title_allow_keywords:
-  - "engineer"        # covers Engineer / Engineering Manager / Software Engineering
-  - "engineering"
-  - "developer"
-  - "development"
-  - "programmer"
-  - "architect"
-  - "sre"
-  - "site reliability"
-  - "devops"
-  - "full stack"
-  - "fullstack"
-  - "full-stack"
+  - "software engineer"
+  - "software developer"
   - "backend"
   - "back-end"
   - "back end"
-  - "platform"
-  - "tech lead"
-  - "technical lead"
+  - "full stack"
+  - "full-stack"
+  - "fullstack"
+  - "node"
+  - "typescript"
+  - "javascript"
+  - "web developer"
+  - "application developer"
+  - "platform engineer"
+  - "ai engineer"
+  - "machine learning engineer"
+  - "ml engineer"
+  - "developer"
 
-# Even if the title matched the allowlist above, drop it if it also
-# matches one of these — engineering-adjacent titles that aren't a fit.
 exclusion_keywords:
-  - "accountant"
-  - "accounting"
-  - "nurse"
-  - "nursing"
-  - "lawyer"
-  - "attorney"
-  - "paralegal"
-  - "chemist"
-  - "chemistry"
-  - "electrician"
-  - "plumber"
-  - "welder"
-  - "sales representative"
-  - "account executive"
   - "sales engineer"
-  - "sales development"
-  - "business development representative"
-  - "recruiter"
-  - "talent acquisition"
-  - "talent brand"
-  - "warehouse"
-  - "forklift"
-  - "driver"
-  - "cdl"
-  - "teacher"
-  - "professor"
-  - "dentist"
-  - "physician"
-  - "pharmacist"
+  - "solutions engineer"
+  - "solution engineer"
+  - "support engineer"
+  - "customer success"
+  - "field engineer"
   - "mechanical engineer"
   - "electrical engineer"
   - "civil engineer"
   - "chemical engineer"
-  - "industrial engineer"
-  - "manufacturing engineer"
   - "hardware engineer"
-  - "process engineer"
-  - "field engineer"
-  - "customer success"
-  - "account manager"
-  - "marketing"
-  - "copywriting"
-  - "compliance"
-  - "product marketing"
+  - "qa engineer"
+  - "quality assurance"
+  - "test engineer"
+  - "security engineer"
+  - "embedded"
+  - "firmware"
+  - "wordpress"
+  - "sap consultant"
 
-# EDIT ME FIRST: locations to keep, as regex patterns (case-insensitive)
-# matched against the free-text location string each ATS/aggregator
-# returns. Ships below as Canada/Alberta-only (the original author's
-# search) — replace with your own country/region/cities, or every job
-# will get rejected regardless of how good a fit it is. Deliberately does
-# NOT allow a bare "Remote" with no country qualifier — some postings say
-# "Remote Poland"/"Remote Spain"/"Remote Australia" etc, so an allowlist
-# needs an explicit country/region signal instead.
+# Hard title-level seniority exclusions. These are checked BEFORE the
+# priority-title shortcut so "Senior Software Engineer" cannot slip through.
+seniority_exclusion_keywords:
+  - "senior"
+  - "sr."
+  - "sr "
+  - "staff"
+  - "principal"
+  - "lead engineer"
+  - "tech lead"
+  - "technical lead"
+  - "engineering manager"
+  - "manager, engineering"
+  - "head of"
+  - "director"
+  - "architect"
+  - "distinguished"
+
+# Positive signals used by the AI prompt/UI. A title does not have to contain
+# one of these because many European companies simply use "Software Engineer"
+# for an early-career opening.
+seniority_preferred_keywords:
+  - "junior"
+  - "graduate"
+  - "new grad"
+  - "entry level"
+  - "entry-level"
+  - "early career"
+  - "associate"
+  - "software engineer i"
+  - "developer i"
+  - "trainee"
+
+# If a JD explicitly states 4+ years (or "at least 4 years") of professional
+# experience, reject it before AI scoring. 2-3 year requirements are left to
+# the model because companies often treat them flexibly for strong graduates.
+max_required_years: 3
+
+# Reject clearly dated postings older than this. Unknown/unparseable dates are
+# not rejected; live validation handles them separately.
+max_post_age_days: 14
+
+# Europe-aware allowlist. We accept country names, major target cities, EMEA,
+# EU/Europe-wide remote wording, and Hungary/Budapest as the home market.
+# Bare "Remote" is deliberately NOT enough because it may mean US-only.
 location_allow_patterns:
-  - '\bcanada\b'
-  - '\balberta\b'
-  - ',\s*ab\b'       # "Calgary, AB" / "Edmonton, AB"
-  - '\bedmonton\b'
-  - '\bcalgary\b'
-  - '\bontario\b'
-  - '\bvancouver\b'
+  - '\beurope\b'
+  - '\beuropean union\b'
+  - '\beu\b'
+  - '\bemea\b'
+  - '\bhungary\b'
+  - '\bbudapest\b'
+  - '\bgermany\b'
+  - '\bberlin\b'
+  - '\bmunich\b'
+  - '\bmünchen\b'
+  - '\bhamburg\b'
+  - '\bfrankfurt\b'
+  - '\bcologne\b'
+  - '\baustria\b'
+  - '\bvienna\b'
+  - '\bwien\b'
+  - '\bswitzerland\b'
+  - '\bzurich\b'
+  - '\bzürich\b'
+  - '\bgeneva\b'
+  - '\bnetherlands\b'
+  - '\bamsterdam\b'
+  - '\brotterdam\b'
+  - '\butrecht\b'
+  - '\bfrance\b'
+  - '\bparis\b'
+  - '\blyon\b'
+  - '\bspain\b'
+  - '\bbarcelona\b'
+  - '\bmadrid\b'
+  - '\bportugal\b'
+  - '\blisbon\b'
+  - '\blisboa\b'
+  - '\bporto\b'
+  - '\bitaly\b'
+  - '\bmilan\b'
+  - '\bmilano\b'
+  - '\brome\b'
+  - '\bdenmark\b'
+  - '\bcopenhagen\b'
+  - '\bsweden\b'
+  - '\bstockholm\b'
+  - '\bnorway\b'
+  - '\boslo\b'
+  - '\bfinland\b'
+  - '\bhelsinki\b'
+  - '\biceland\b'
+  - '\breykjavik\b'
+  - '\bbelgium\b'
+  - '\bbrussels\b'
+  - '\bczech(?:ia| republic)\b'
+  - '\bprague\b'
+  - '\bpoland\b'
+  - '\bwarsaw\b'
+  - '\bkrak(?:ow|ów)\b'
+  - '\bireland\b'
+  - '\bdublin\b'
+  - '\bestonia\b'
+  - '\btallinn\b'
+  - '\blithuania\b'
+  - '\bvilnius\b'
+  - '\blatvia\b'
+  - '\briga\b'
+  - '\bslovenia\b'
+  - '\bljubljana\b'
+  - '\bcroatia\b'
+  - '\bzagreb\b'
+  - '\bromania\b'
+  - '\bbucharest\b'
 
-# EDIT ME FIRST (along with stack_core below): JD stack dealbreakers — if
-# the description clearly requires one of these languages/frameworks and
-# does NOT also mention anything from stack_core, treat it as a mismatch.
-# Ships assuming a Python/JS candidate who wants to exclude
-# Java/C#/.NET/etc — if your own stack includes one of these "dealbreaker"
-# languages, move it down into stack_core instead, or this will reject
-# roles in your own stack. Only runs when a description is
-# available. Word-boundary matched to avoid e.g. "java" matching
-# "javascript". Deliberately NOT including bare "go" — too ambiguous
-# ("go-to-market", "go live", etc.); "golang" below covers it, and most Go
-# postings also say "Golang" or "Go (Golang)" somewhere in the JD.
+# Technologies that are usually a mismatch when they are the ONLY backend
+# stack mentioned. Mixed-stack roles still pass if they mention stack_core.
 stack_dealbreakers:
-  - '\bjava\b'
-  - '\bc#\b'
-  - '\.net\b'
-  - '\bgolang\b'
-  - '\bruby\b'
-  - '\brails\b'
-  - '\bphp\b'
-  - '\bkotlin\b'
-  - '\bswift\b'
-  - '\bscala\b'
-  - '\bc\+\+\b'
+  - '\bcobol\b'
+  - '\bsap abap\b'
+  - '\bmainframe\b'
+  - '\bdelphi\b'
+  - '\bobjective-c\b'
 
-# Your own core stack — if the JD mentions any of these, a stack dealbreaker
-# match above is ignored (the role likely uses both, or the dealbreaker
-# keyword is a false positive).
+# Ayush's strongest/current search stack. Python remains acceptable but is
+# intentionally not enough by itself to trigger a "core-stack rescue".
 stack_core:
-  - '\bpython\b'
-  - '\bfastapi\b'
-  - '\bdjango\b'
-  - '\bflask\b'
-  - '\bjavascript\b'
   - '\btypescript\b'
-  - '\breact\b'
+  - '\bjavascript\b'
   - '\bnode(?:\.?js)?\b'
+  - '\bnest(?:\.?js)?\b'
+  - '\bexpress(?:\.?js)?\b'
+  - '\breact\b'
+  - '\bpostgres(?:ql)?\b'
+  - '\bsupabase\b'
+  - '\bgraphql\b'
+  - '\bredis\b'
+  - '\brabbitmq\b'
+  - '\bpub\/?sub\b'
+  - '\bdocker\b'
+  - '\bkubernetes\b'
 
-# Below this many characters, a JD is treated as a short aggregator teaser
-# snippet rather than a full posting (see app/filters.py's looks_truncated).
 truncated_description_min_chars: 400

@@ -1,134 +1,104 @@
-"""Sanity test for filters.py + dedup.py, using real sample data plus the
-actual noise patterns found in a live run on 2026-08-11 (Remote
-Poland/Spain/Australia leaking through, and non-engineering titles like
-Analyst/Manager/Marketing passing because the old filter was exclusion-only).
-Run with: python -m app.tests.test_pipeline
-"""
+"""Tests for the Europe/early-career deterministic filters and dedup."""
 import os
-from app import filters
-from app import dedup
+from datetime import datetime, timezone
 
-SAMPLE_JOBS = [
-    # Should PASS: real fields, Canada-eligible remote, matches title allowlist
-    {"company": "Affirm", "title": "Senior Software Engineer, Backend (Batch Infrastructure)",
-     "location": "Remote Canada", "url": "https://job-boards.greenhouse.io/affirm/jobs/1111",
-     "description": "We use Python, FastAPI and React."},
-    # Should FAIL: excluded title keyword (compliance)
-    {"company": "Affirm", "title": "Compliance Lead, Canada",
-     "location": "Remote Canada", "url": "https://job-boards.greenhouse.io/affirm/jobs/7788916003",
-     "description": ""},
-    # Should FAIL: location not in allowlist (Remote US)
-    {"company": "Affirm", "title": "Staff Software Engineer",
-     "location": "Remote US", "url": "https://job-boards.greenhouse.io/affirm/jobs/2222",
-     "description": ""},
-    # Should FAIL: real noise from 2026-08-11 run — "Remote Poland" used to leak
-    # through the old "\bremote\b(?!.*\bus\b)" pattern.
-    {"company": "Affirm", "title": "Analytics Engineer II",
-     "location": "Remote Poland", "url": "https://job-boards.greenhouse.io/affirm/jobs/7764109003",
-     "description": ""},
-    # Should FAIL: real noise — title has no engineering keyword at all,
-    # old exclusion-only filter had nothing to catch this on.
-    {"company": "Affirm", "title": "Marketing Operations Manager",
-     "location": "Remote Canada", "url": "https://job-boards.greenhouse.io/affirm/jobs/9999",
-     "description": ""},
-    {"company": "Affirm", "title": "Senior Manager, Talent Brand",
-     "location": "Remote Canada", "url": "https://job-boards.greenhouse.io/affirm/jobs/9998",
-     "description": ""},
-    # Should PASS: real Alberta on-site posting
-    {"company": "Snorkel AI", "title": "Software Engineer — Backend",
-     "location": "Calgary, AB", "url": "https://job-boards.greenhouse.io/snorkelai/jobs/4911972004",
-     "description": "Backend role, Python and Go."},
-    # Should FAIL: excluded keyword (nurse)
-    {"company": "Some Co", "title": "Occupational Health Nurse",
-     "location": "Remote Canada", "url": "https://example.com/jobs/9999",
-     "description": ""},
-    # Should FAIL: title matches allowlist ("engineer") but JD is a stack
-    # dealbreaker — Java shop, no Python/JS/TS mentioned anywhere.
-    {"company": "BigCorp", "title": "Senior Software Engineer",
-     "location": "Remote Canada", "url": "https://example.com/jobs/8888",
-     "description": "5+ years of Java and Spring Boot required. Experience with Kafka a plus."},
-    # Should PASS: title matches, JD mentions Java AND Python — not a hard
-    # dealbreaker, worth letting through for the (future) AI step to judge.
-    {"company": "DualStackCo", "title": "Backend Engineer",
-     "location": "Remote Canada", "url": "https://example.com/jobs/7777",
-     "description": "Our platform is a mix of Java services and a newer Python/FastAPI stack."},
-    # Duplicate of the first PASS entry by URL -> should be filtered by dedup on 2nd pass
-    {"company": "Affirm", "title": "Senior Software Engineer, Backend (Batch Infrastructure)",
-     "location": "Remote Canada", "url": "https://job-boards.greenhouse.io/affirm/jobs/1111",
-     "description": "We use Python, FastAPI and React."},
-    # Repost under a new URL, same company+title -> should be caught by company+title dedup
-    {"company": "Affirm", "title": "Senior Software Engineer, Backend (Batch Infrastructure)",
-     "location": "Remote Canada", "url": "https://job-boards.greenhouse.io/affirm/jobs/3333-repost",
-     "description": "We use Python, FastAPI and React."},
-    # Should PASS: real Lever sample (AltaML), Edmonton without "Canada"/"AB" in the string
-    {"company": "AltaML", "title": "Intermediate Full Stack Software Engineer",
-     "location": "Edmonton, Calgary", "url": "https://jobs.lever.co/altaml/22d02404-b9c9-4b77-9448-add55d961444",
-     "description": "Python and React experience preferred."},
-    # Should PASS: real 2026-08-11 false-positive fix — "Software Engineer"
-    # is an unambiguous PRIORITY_TITLE_KEYWORDS match, so the "marketing"
-    # substring no longer trips EXCLUSION_KEYWORDS.
-    {"company": "Warner Music Group", "title": "Software Engineer, Automated Marketing",
-     "location": "Alberta, Canada", "url": "https://www.adzuna.ca/details/5702928490",
-     "description": "Build automated marketing tooling. Python and React."},
-]
+from app import dedup, filters
 
 TEST_DB = "data/test_seen_jobs.sqlite3"
 
+SAMPLE_JOBS = [
+    # Strong early-career Europe fit.
+    {"company": "Example", "title": "Junior Backend Engineer",
+     "location": "Berlin, Germany", "url": "https://example.com/jobs/1",
+     "posted_at": "2026-09-19T10:00:00Z",
+     "description": "TypeScript, Node.js, PostgreSQL and Docker. 1+ years experience."},
+    # Generic title is allowed if not explicitly senior.
+    {"company": "Example", "title": "Software Engineer",
+     "location": "Budapest, Hungary", "url": "https://example.com/jobs/2",
+     "posted_at": "2026-09-18",
+     "description": "Build Node.js APIs with PostgreSQL."},
+    # Hard seniority rejection.
+    {"company": "Example", "title": "Senior Software Engineer",
+     "location": "Munich, Germany", "url": "https://example.com/jobs/3",
+     "posted_at": "2026-09-20",
+     "description": "TypeScript and Node.js."},
+    # Explicit experience threshold too high.
+    {"company": "Example", "title": "Backend Engineer",
+     "location": "Amsterdam, Netherlands", "url": "https://example.com/jobs/4",
+     "posted_at": "2026-09-20",
+     "description": "At least 5 years of professional software experience. TypeScript."},
+    # Europe country should pass even if city is absent.
+    {"company": "Example", "title": "Graduate Software Engineer",
+     "location": "Portugal", "url": "https://example.com/jobs/5",
+     "posted_at": "2026-09-20",
+     "description": "JavaScript, React and Node.js."},
+    # US-only should fail.
+    {"company": "Example", "title": "Junior Software Engineer",
+     "location": "Remote US", "url": "https://example.com/jobs/6",
+     "posted_at": "2026-09-20",
+     "description": "TypeScript."},
+    # Obvious non-target engineering role.
+    {"company": "Example", "title": "Sales Engineer",
+     "location": "Paris, France", "url": "https://example.com/jobs/7",
+     "posted_at": "2026-09-20",
+     "description": "TypeScript."},
+    # Stale posting with parseable date should fail.
+    {"company": "Example", "title": "Junior Full-Stack Engineer",
+     "location": "Madrid, Spain", "url": "https://example.com/jobs/8",
+     "posted_at": "2025-01-01",
+     "description": "React and Node.js."},
+    # Duplicate of first by company/title/location but a different URL.
+    {"company": "Example", "title": "Junior Backend Engineer",
+     "location": "Berlin, Germany", "url": "https://example.com/jobs/1-repost",
+     "posted_at": "2026-09-20",
+     "description": "TypeScript, Node.js, PostgreSQL and Docker."},
+]
 
-def main():
+
+def test_filters_and_dedup():
     if os.path.exists(TEST_DB):
         os.remove(TEST_DB)
 
-    print("=== Filter results ===")
-    filtered = []
-    for job in SAMPLE_JOBS:
-        ok = filters.passes_filters(job)
-        print(f"{'PASS' if ok else 'DROP':5s} | {job['company']:14s} | {job['title'][:50]:50s} | {job['location']}")
-        if ok:
-            filtered.append(job)
+    passed = [job for job in SAMPLE_JOBS if filters.passes_filters(job)]
+    assert [j["url"] for j in passed] == [
+        "https://example.com/jobs/1",
+        "https://example.com/jobs/2",
+        "https://example.com/jobs/5",
+        "https://example.com/jobs/1-repost",
+    ]
 
-    print(f"\n{len(filtered)}/{len(SAMPLE_JOBS)} passed title+location+stack filters\n")
-
-    print("=== Dedup results (processing filtered jobs in order) ===")
-    kept = []
     with dedup.connect(TEST_DB) as conn:
-        for job in filtered:
+        kept = []
+        for job in passed:
             if dedup.is_new(conn, job):
                 dedup.mark_seen(conn, job)
                 kept.append(job)
-                print(f"NEW  | {job['company']:14s} | {job['title'][:50]:50s} | {job['url']}")
-            else:
-                print(f"DUPE | {job['company']:14s} | {job['title'][:50]:50s} | {job['url']}")
+        assert len(kept) == 3
 
-    print(f"\nFinal candidates after filters+dedup: {len(kept)}")
-
-    # Assertions to make this a real check, not just eyeballing.
-    # PASS: Affirm SWE (x1 unique after dedup), Snorkel AI Calgary,
-    # DualStackCo (mixed stack, not a hard dealbreaker), AltaML.
-    # DROP: Compliance Lead, Remote US, Remote Poland, Marketing Ops Manager,
-    # Senior Manager Talent Brand, Occupational Health Nurse, BigCorp
-    # (Java-only dealbreaker).
-    assert len(filtered) == 7, f"expected 7 to pass all filters, got {len(filtered)}"
-    assert len(kept) == 5, f"expected 5 unique candidates after dedup, got {len(kept)}"
-
-    # Targeted unit checks for the specific bugs found in the 2026-08-11 run.
-    assert not filters.location_is_allowed("Remote Poland")
-    assert not filters.location_is_allowed("Remote Spain")
-    assert not filters.location_is_allowed("Remote Australia")
-    assert filters.location_is_allowed("Remote Canada")
-    assert filters.location_is_allowed("Calgary, AB")
-    assert not filters.title_is_relevant("Marketing Operations Manager")
-    assert not filters.title_is_relevant("Senior Manager, Talent Brand")
-    assert not filters.title_is_relevant("Compliance Lead, Canada")
-    assert filters.title_is_relevant("Senior Software Engineer, Backend")
-    assert filters.title_is_relevant("Software Engineer, Automated Marketing")
-    assert not filters.title_is_relevant("Sales Engineer")  # priority list shouldn't rescue this
-    assert filters.jd_stack_mismatch("5+ years of Java and Spring Boot required.")
-    assert not filters.jd_stack_mismatch("Java services and a Python/FastAPI stack.")
-    assert not filters.jd_stack_mismatch("")  # no JD available -> don't reject on stack alone
-
-    print("\nAll assertions passed.")
+    os.remove(TEST_DB)
 
 
-if __name__ == "__main__":
-    main()
+def test_seniority_location_and_experience_helpers():
+    assert filters.title_is_relevant("Junior Backend Engineer")
+    assert filters.title_is_relevant("Software Engineer")
+    assert not filters.title_is_relevant("Senior Software Engineer")
+    assert not filters.title_is_relevant("Staff Backend Engineer")
+    assert not filters.title_is_relevant("Sales Engineer")
+
+    assert filters.location_is_allowed("Budapest, Hungary")
+    assert filters.location_is_allowed("Remote - EMEA")
+    assert filters.location_is_allowed("Barcelona, Spain")
+    assert not filters.location_is_allowed("Remote US")
+
+    assert filters.extract_explicit_required_years("At least 5 years of professional experience") == 5
+    assert filters.extract_explicit_required_years("2+ years of software experience") == 2
+    assert not filters.experience_requirement_is_allowed("Minimum 4 years of software experience")
+    assert filters.experience_requirement_is_allowed("2+ years of software experience")
+
+
+def test_freshness_parser():
+    fixed_now = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    assert filters.posted_at_is_fresh("2026-09-19", now=fixed_now)
+    assert not filters.posted_at_is_fresh("2026-08-01", now=fixed_now)
+    assert filters.posted_at_is_fresh(None, now=fixed_now)
+    assert filters.posted_at_is_fresh("not-a-date", now=fixed_now)

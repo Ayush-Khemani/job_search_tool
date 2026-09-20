@@ -31,7 +31,7 @@ def test_full_description_prefers_greenhouse_api():
     job_resp = _fake_response("...", json_data={"content": "<p>Full JD from Greenhouse's own API.</p>"})
 
     with patch("httpx.get", side_effect=[redirect_resp, job_resp]) as mock_get:
-        result = aggregator_clients.fetch_full_description("https://www.adzuna.ca/details/1")
+        result = aggregator_clients.fetch_full_description("https://www.adzuna.de/details/1")
     assert result["description"] == "<p>Full JD from Greenhouse's own API.</p>"
     assert result["ats"] == "greenhouse" and result["slug"] == "warnermusicgroup"
     assert mock_get.call_count == 2  # redirect follow, then the single-job API call
@@ -44,7 +44,7 @@ def test_full_description_prefers_lever_api():
     job_resp = _fake_response("...", json_data={"descriptionPlain": "Full JD from Lever's own API."})
 
     with patch("httpx.get", side_effect=[redirect_resp, job_resp]):
-        result = aggregator_clients.fetch_full_description("https://www.adzuna.ca/details/2")
+        result = aggregator_clients.fetch_full_description("https://www.adzuna.de/details/2")
     assert result["description"] == "Full JD from Lever's own API."
     assert result["ats"] == "lever" and result["slug"] == "altaml"
     print("fetch_full_description: Lever single-job API preferred, ats/slug reported — OK")
@@ -55,7 +55,7 @@ def test_full_description_falls_back_to_html_scrape():
     redirect_resp = _fake_response("https://careers.example.com/job/42", text=html)
 
     with patch("httpx.get", side_effect=[redirect_resp]):
-        result = aggregator_clients.fetch_full_description("https://www.adzuna.ca/details/3")
+        result = aggregator_clients.fetch_full_description("https://www.adzuna.de/details/3")
     assert result["description"] is not None
     assert "Software Engineer" in result["description"] and "Python" in result["description"]
     assert "color:red" not in result["description"]  # style block dropped
@@ -65,7 +65,7 @@ def test_full_description_falls_back_to_html_scrape():
 
 def test_full_description_returns_none_on_failure():
     with patch("httpx.get", side_effect=Exception("connection refused")):
-        result = aggregator_clients.fetch_full_description("https://www.adzuna.ca/details/4")
+        result = aggregator_clients.fetch_full_description("https://www.adzuna.de/details/4")
     assert result == {"description": None, "ats": None, "slug": None}
     print("fetch_full_description: network failure -> empty result, no crash — OK")
 
@@ -80,9 +80,9 @@ def test_adzuna_only_fetches_full_jd_for_promising_thin_snippets():
     what keeps a 2000-result run from turning into 2000 extra requests."""
     base_result = lambda **kw: {
         "title": "Software Engineer, Backend",
-        "location": {"display_name": "Alberta, Canada"},
+        "location": {"display_name": "Berlin, Germany"},
         "company": {"display_name": "TestCo"},
-        "redirect_url": "https://www.adzuna.ca/details/x",
+        "redirect_url": "https://www.adzuna.de/details/x",
         "created": "2026-08-01",
         "description": "Short teaser.",
         **kw,
@@ -90,7 +90,7 @@ def test_adzuna_only_fetches_full_jd_for_promising_thin_snippets():
     results = [
         base_result(),  # promising + thin -> SHOULD fetch
         base_result(title="Marketing Operations Manager"),  # fails title -> should NOT fetch
-        base_result(location={"display_name": "Remote Poland"}),  # fails location -> should NOT fetch
+        base_result(location={"display_name": "Remote US"}),  # fails location -> should NOT fetch
         base_result(description="A" * 500 + " already a full-length description, well past the floor."),  # not thin -> should NOT fetch
     ]
     page_resp = _fake_response("...", json_data={"results": results})
@@ -101,7 +101,7 @@ def test_adzuna_only_fetches_full_jd_for_promising_thin_snippets():
          patch("app.aggregator_clients.fetch_full_description",
                return_value={"description": "FULL JD TEXT, much longer than the original teaser snippet.",
                               "ats": None, "slug": None}) as mock_full:
-        jobs = aggregator_clients.fetch_adzuna({"results_per_page": 50, "max_pages": 1})
+        jobs = aggregator_clients.fetch_adzuna({"country": "de", "results_per_page": 50, "max_pages": 1})
 
     assert mock_full.call_count == 1, f"expected exactly 1 full-JD fetch, got {mock_full.call_count}"
     assert jobs[0]["description"].startswith("FULL JD TEXT")
@@ -117,9 +117,9 @@ def test_adzuna_queues_discovered_companies():
     to pick up after the run — see main.py."""
     result = {
         "title": "Software Engineer, Automated Marketing",
-        "location": {"display_name": "Alberta, Canada"},
+        "location": {"display_name": "Berlin, Germany"},
         "company": {"display_name": "Warner Music Group"},
-        "redirect_url": "https://www.adzuna.ca/details/5702928490",
+        "redirect_url": "https://www.adzuna.de/details/5702928490",
         "created": "2026-04-17",
         "description": "Short teaser…",
     }
@@ -132,7 +132,7 @@ def test_adzuna_queues_discovered_companies():
          patch("app.aggregator_clients.fetch_full_description",
                return_value={"description": "Full JD text, much longer than the teaser snippet ever was.",
                               "ats": "greenhouse", "slug": "warnermusicgroup"}):
-        aggregator_clients.fetch_adzuna({"results_per_page": 50, "max_pages": 1})
+        aggregator_clients.fetch_adzuna({"country": "de", "results_per_page": 50, "max_pages": 1})
 
     assert aggregator_clients.DISCOVERED_COMPANIES == [
         {"name": "Warner Music Group", "ats": "greenhouse", "slug": "warnermusicgroup"}
