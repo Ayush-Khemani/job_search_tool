@@ -69,6 +69,26 @@ CREATE TABLE IF NOT EXISTS ai_evaluations (
     FOREIGN KEY (url) REFERENCES job_details(url)
 );
 
+CREATE TABLE IF NOT EXISTS local_evaluations (
+    url TEXT PRIMARY KEY,
+    match_score INTEGER,
+    recommendation TEXT,
+    career_level_fit TEXT,
+    tech_stack_fit TEXT,
+    experience_fit TEXT,
+    location_fit TEXT,
+    work_authorization_risk TEXT,
+    language_risk TEXT,
+    genuine_gaps TEXT,
+    transferable_strengths TEXT,
+    risk_factors TEXT,
+    matched_keywords TEXT,
+    score_breakdown TEXT,
+    rule_version TEXT,
+    evaluated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (url) REFERENCES job_details(url)
+);
+
 -- Your own tracking, separate from the AI's recommendation. The AI's
 -- apply/consider/skip is a suggestion made before applying; my_status is
 -- what actually happened (applied/interview/rejected/skipped/silence) —
@@ -255,6 +275,74 @@ def get_unevaluated_candidates(conn) -> list[dict]:
     )
     keys = ["url", "company", "title", "location", "posted_at", "description"]
     return [dict(zip(keys, row)) for row in cur.fetchall()]
+
+
+def get_local_score_candidates(conn, rescore: bool = False) -> list[dict]:
+    """Jobs eligible for the completely free local scorer.
+
+    By default, only jobs without a local score are returned. --rescore
+    intentionally recalculates all passed/live jobs after rule changes.
+    """
+    join = "" if rescore else "LEFT JOIN local_evaluations le ON jd.url = le.url "
+    where_extra = "" if rescore else "AND le.url IS NULL "
+    cur = conn.execute(
+        "SELECT jd.url, jd.company, jd.title, jd.location, jd.posted_at, jd.description "
+        "FROM job_details jd "
+        + join +
+        "WHERE jd.passed_filters = 1 "
+        "AND COALESCE(jd.is_live, 1) = 1 "
+        + where_extra +
+        "ORDER BY jd.fetched_at DESC"
+    )
+    keys = ["url", "company", "title", "location", "posted_at", "description"]
+    return [dict(zip(keys, row)) for row in cur.fetchall()]
+
+
+def save_local_evaluation(conn, url: str, evaluation: dict) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO local_evaluations "
+        "(url, match_score, recommendation, career_level_fit, tech_stack_fit, "
+        "experience_fit, location_fit, work_authorization_risk, language_risk, "
+        "genuine_gaps, transferable_strengths, risk_factors, matched_keywords, "
+        "score_breakdown, rule_version, evaluated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        (
+            url,
+            evaluation.get("match_score"),
+            evaluation.get("recommendation"),
+            evaluation.get("career_level_fit"),
+            evaluation.get("tech_stack_fit"),
+            evaluation.get("experience_fit"),
+            evaluation.get("location_fit"),
+            evaluation.get("work_authorization_risk"),
+            evaluation.get("language_risk"),
+            evaluation.get("genuine_gaps"),
+            evaluation.get("transferable_strengths"),
+            evaluation.get("risk_factors"),
+            evaluation.get("matched_keywords"),
+            evaluation.get("score_breakdown"),
+            evaluation.get("rule_version"),
+        ),
+    )
+
+
+def iter_local_scored_candidates(conn):
+    cur = conn.execute(
+        "SELECT jd.company, jd.title, jd.location, jd.url, jd.posted_at, "
+        "       le.match_score, le.recommendation, le.career_level_fit, "
+        "       le.tech_stack_fit, le.experience_fit, le.location_fit, "
+        "       le.work_authorization_risk, le.language_risk, le.genuine_gaps, "
+        "       le.transferable_strengths, le.risk_factors, le.matched_keywords "
+        "FROM local_evaluations le "
+        "JOIN job_details jd ON jd.url = le.url "
+        "ORDER BY le.match_score DESC"
+    )
+    keys = ["company", "title", "location", "url", "posted_at", "match_score",
+            "recommendation", "career_level_fit", "tech_stack_fit", "experience_fit",
+            "location_fit", "work_authorization_risk", "language_risk", "genuine_gaps",
+            "transferable_strengths", "risk_factors", "matched_keywords"]
+    for row in cur.fetchall():
+        yield dict(zip(keys, row))
 
 
 def iter_jobs_for_live_check(conn, passed_only: bool = True):
