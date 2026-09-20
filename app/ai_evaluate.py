@@ -153,8 +153,10 @@ def write_csv(conn, path: Path = OUTPUT_CSV) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = list(dedup.iter_scored_candidates(conn))
     fields = [
-        "match_score", "recommendation", "company", "title", "location",
-        "transferable_strengths", "genuine_gaps", "risk_factors", "url", "posted_at",
+        "match_score", "recommendation", "career_level_fit", "tech_stack_fit",
+        "experience_fit", "location_fit", "work_authorization_risk", "language_risk",
+        "company", "title", "location", "transferable_strengths", "genuine_gaps",
+        "risk_factors", "url", "posted_at",
     ]
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
