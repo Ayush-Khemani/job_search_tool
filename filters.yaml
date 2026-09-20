@@ -95,6 +95,10 @@ seniority_preferred_keywords:
 # the model because companies often treat them flexibly for strong graduates.
 max_required_years: 3
 
+# Reject clearly dated postings older than this. Unknown/unparseable dates are
+# not rejected; live validation handles them separately.
+max_post_age_days: 14
+
 # Europe-aware allowlist. We accept country names, major target cities, EMEA,
 # EU/Europe-wide remote wording, and Hungary/Budapest as the home market.
 # Bare "Remote" is deliberately NOT enough because it may mean US-only.
