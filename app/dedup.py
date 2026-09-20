@@ -45,7 +45,10 @@ CREATE TABLE IF NOT EXISTS job_details (
     description TEXT,
     passed_filters INTEGER,
     fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    source TEXT
+    source TEXT,
+    is_live INTEGER,
+    last_verified_at TEXT,
+    live_check_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ai_evaluations (
@@ -94,8 +97,15 @@ def _migrate(conn) -> None:
     columns added later need an explicit ALTER TABLE for a DB file that
     already exists (e.g. `source`, added 2026-08-12)."""
     existing = {row[1] for row in conn.execute("PRAGMA table_info(job_details)")}
-    if "source" not in existing:
-        conn.execute("ALTER TABLE job_details ADD COLUMN source TEXT")
+    migrations = {
+        "source": "TEXT",
+        "is_live": "INTEGER",
+        "last_verified_at": "TEXT",
+        "live_check_reason": "TEXT",
+    }
+    for column, sql_type in migrations.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE job_details ADD COLUMN {column} {sql_type}")
 
 
 @contextmanager
@@ -221,10 +231,32 @@ def get_unevaluated_candidates(conn) -> list[dict]:
         "SELECT jd.url, jd.company, jd.title, jd.location, jd.posted_at, jd.description "
         "FROM job_details jd "
         "LEFT JOIN ai_evaluations ae ON jd.url = ae.url "
-        "WHERE jd.passed_filters = 1 AND ae.url IS NULL"
+        "WHERE jd.passed_filters = 1 AND ae.url IS NULL "
+        "AND COALESCE(jd.is_live, 1) = 1"
     )
     keys = ["url", "company", "title", "location", "posted_at", "description"]
     return [dict(zip(keys, row)) for row in cur.fetchall()]
+
+
+def iter_jobs_for_live_check(conn, passed_only: bool = True):
+    """Yield stored jobs that should be re-verified for availability."""
+    where = "WHERE passed_filters = 1" if passed_only else ""
+    cur = conn.execute(
+        "SELECT url, company, title, location, posted_at, source, is_live, last_verified_at "
+        f"FROM job_details {where} ORDER BY fetched_at DESC"
+    )
+    keys = ["url", "company", "title", "location", "posted_at", "source", "is_live", "last_verified_at"]
+    for row in cur.fetchall():
+        yield dict(zip(keys, row))
+
+
+def set_live_status(conn, url: str, is_live: bool, reason: str = "") -> None:
+    conn.execute(
+        "UPDATE job_details "
+        "SET is_live = ?, last_verified_at = CURRENT_TIMESTAMP, live_check_reason = ? "
+        "WHERE url = ?",
+        (1 if is_live else 0, reason[:500], url),
+    )
 
 
 def save_evaluation(conn, url: str, evaluation: dict, model: str) -> None:
