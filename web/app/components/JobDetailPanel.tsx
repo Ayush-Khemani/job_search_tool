@@ -18,7 +18,8 @@ type JobDetailPanelProps = {
 function scoreBreakdown(job: Job): Array<[string, {score?: number; max?: number; reason?: string} | number]> {
   if (!job.score_breakdown || job.evaluation_source !== "local") return [];
   try {
-    return Object.entries(JSON.parse(job.score_breakdown));
+    const parsed = JSON.parse(job.score_breakdown) as Record<string, {score?: number; max?: number; reason?: string} | number>;
+    return Object.entries(parsed);
   } catch {
     return [];
   }
@@ -90,7 +91,7 @@ export default function JobDetailPanel({
                       }
                       return (
                         <div key={name}>
-                          {name.replaceAll("_", " ")}: {value.score}/{value.max}
+                          {name.replace(/_/g, " ")}: {value.score}/{value.max}
                           {value.reason ? ` — ${value.reason}` : ""}
                         </div>
                       );
