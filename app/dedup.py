@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS ai_evaluations (
     url TEXT PRIMARY KEY,
     match_score INTEGER,
     recommendation TEXT,
+    career_level_fit TEXT,
+    tech_stack_fit TEXT,
+    experience_fit TEXT,
+    location_fit TEXT,
+    work_authorization_risk TEXT,
+    language_risk TEXT,
     genuine_gaps TEXT,
     transferable_strengths TEXT,
     risk_factors TEXT,
@@ -106,6 +112,19 @@ def _migrate(conn) -> None:
     for column, sql_type in migrations.items():
         if column not in existing:
             conn.execute(f"ALTER TABLE job_details ADD COLUMN {column} {sql_type}")
+
+    eval_existing = {row[1] for row in conn.execute("PRAGMA table_info(ai_evaluations)")}
+    eval_migrations = {
+        "career_level_fit": "TEXT",
+        "tech_stack_fit": "TEXT",
+        "experience_fit": "TEXT",
+        "location_fit": "TEXT",
+        "work_authorization_risk": "TEXT",
+        "language_risk": "TEXT",
+    }
+    for column, sql_type in eval_migrations.items():
+        if column not in eval_existing:
+            conn.execute(f"ALTER TABLE ai_evaluations ADD COLUMN {column} {sql_type}")
 
 
 @contextmanager
@@ -262,12 +281,20 @@ def set_live_status(conn, url: str, is_live: bool, reason: str = "") -> None:
 def save_evaluation(conn, url: str, evaluation: dict, model: str) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO ai_evaluations "
-        "(url, match_score, recommendation, genuine_gaps, transferable_strengths, risk_factors, model) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "(url, match_score, recommendation, career_level_fit, tech_stack_fit, "
+        "experience_fit, location_fit, work_authorization_risk, language_risk, "
+        "genuine_gaps, transferable_strengths, risk_factors, model) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             url,
             evaluation.get("match_score"),
             evaluation.get("recommendation"),
+            evaluation.get("career_level_fit"),
+            evaluation.get("tech_stack_fit"),
+            evaluation.get("experience_fit"),
+            evaluation.get("location_fit"),
+            evaluation.get("work_authorization_risk"),
+            evaluation.get("language_risk"),
             evaluation.get("genuine_gaps"),
             evaluation.get("transferable_strengths"),
             evaluation.get("risk_factors"),
@@ -302,13 +329,17 @@ def iter_scored_candidates(conn):
     for display — used to write the scored CSV."""
     cur = conn.execute(
         "SELECT jd.company, jd.title, jd.location, jd.url, jd.posted_at, "
-        "       ae.match_score, ae.recommendation, ae.genuine_gaps, "
+        "       ae.match_score, ae.recommendation, ae.career_level_fit, "
+        "       ae.tech_stack_fit, ae.experience_fit, ae.location_fit, "
+        "       ae.work_authorization_risk, ae.language_risk, ae.genuine_gaps, "
         "       ae.transferable_strengths, ae.risk_factors "
         "FROM ai_evaluations ae "
         "JOIN job_details jd ON jd.url = ae.url "
         "ORDER BY ae.match_score DESC"
     )
     keys = ["company", "title", "location", "url", "posted_at", "match_score",
-            "recommendation", "genuine_gaps", "transferable_strengths", "risk_factors"]
+            "recommendation", "career_level_fit", "tech_stack_fit", "experience_fit",
+            "location_fit", "work_authorization_risk", "language_risk", "genuine_gaps",
+            "transferable_strengths", "risk_factors"]
     for row in cur.fetchall():
         yield dict(zip(keys, row))
