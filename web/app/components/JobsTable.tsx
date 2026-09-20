@@ -4,8 +4,8 @@ import StatusBadge from "@/app/components/StatusBadge";
 
 const COLUMNS: [SortKey, string][] = [
   ["company", "Company"], ["title", "Title"], ["location", "Location"],
-  ["match_score", "Score"], ["status", "AI status"], ["my_status", "My status"],
-  ["posted_at", "Date"],
+  ["match_score", "Score"], ["status", "Recommendation"], ["evaluation_source", "Score source"],
+  ["my_status", "My status"], ["posted_at", "Date"],
 ];
 
 type JobsTableProps = {
@@ -37,6 +37,7 @@ export default function JobsTable({rows, sortKey, sortDir, onToggleSort, onSelec
             <td className="loc-cell">{j.location}</td>
             <td className="score-cell">{j.match_score ?? "—"}</td>
             <td><StatusBadge status={j.status} /></td>
+            <td>{j.evaluation_source === "openai" ? "OpenAI" : j.evaluation_source === "local" ? "Local rules" : "—"}</td>
             <td onClick={(e) => e.stopPropagation()}>
               <select
                 className="my-status-select"

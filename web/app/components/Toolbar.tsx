@@ -21,7 +21,7 @@ const Toolbar = ({
   return (
     <div className="toolbar">
       <label>
-        AI status
+        Recommendation
         <select value={aiStatusFilter} onChange={(e) => onAiStatusFilterChange(e.target.value)}>
           <option value="all">All</option>
           <option value="apply">Apply</option>

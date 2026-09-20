@@ -1,0 +1,124 @@
+# Transparent, deterministic scoring for the completely free local mode.
+# Maximum raw score = 100 before explicit risk penalties.
+version: "local-rules-v1"
+
+thresholds:
+  apply: 90
+  consider: 80
+
+weights:
+  career: 25
+  stack: 30
+  experience: 20
+  location: 10
+  freshness: 5
+  education: 5
+  description_quality: 5
+
+career:
+  early_signals:
+    - junior
+    - graduate
+    - new grad
+    - entry level
+    - entry-level
+    - early career
+    - associate
+    - software engineer i
+    - developer i
+    - trainee
+  backend_signals:
+    - backend
+    - back-end
+    - back end
+  fullstack_signals:
+    - full stack
+    - full-stack
+    - fullstack
+  general_software_signals:
+    - software engineer
+    - software developer
+    - web developer
+    - application developer
+    - platform engineer
+  secondary_signals:
+    - ai engineer
+    - machine learning engineer
+    - ml engineer
+
+tech_groups:
+  - name: TypeScript / JavaScript
+    points: 6
+    terms: [typescript, javascript]
+  - name: Node backend
+    points: 8
+    terms: [node.js, nodejs, node, nestjs, nest.js, express, express.js]
+  - name: React
+    points: 3
+    terms: [react, react.js, reactjs]
+  - name: PostgreSQL / Supabase
+    points: 4
+    terms: [postgresql, postgres, supabase]
+  - name: APIs / GraphQL
+    points: 3
+    terms: [graphql, rest api, restful, grpc, websocket]
+  - name: Redis / Messaging
+    points: 3
+    terms: [redis, rabbitmq, rabbit mq, pub/sub, pubsub, google pub/sub]
+  - name: Docker / Kubernetes
+    points: 3
+    terms: [docker, kubernetes, k8s]
+
+secondary_tech:
+  - python
+  - fastapi
+  - machine learning
+  - computer vision
+
+location:
+  home_terms: [budapest, hungary]
+  europe_remote_terms:
+    - remote europe
+    - europe remote
+    - remote - europe
+    - remote, europe
+    - emea
+    - european union
+
+risk_patterns:
+  no_sponsorship:
+    penalty: 8
+    phrases:
+      - no visa sponsorship
+      - unable to sponsor
+      - cannot sponsor
+      - will not sponsor
+      - must already be authorized to work
+      - must have the right to work
+      - existing right to work
+      - eu citizenship required
+      - eu citizen required
+  local_language:
+    penalty: 6
+    languages:
+      - german
+      - french
+      - dutch
+      - spanish
+      - italian
+      - portuguese
+      - polish
+      - swedish
+      - danish
+      - norwegian
+      - finnish
+      - czech
+      - hungarian
+    requirement_words:
+      - required
+      - mandatory
+      - fluent
+      - proficiency
+      - b2
+      - c1
+      - c2
