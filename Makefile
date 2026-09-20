@@ -18,9 +18,7 @@ run:
 # Completely free end-to-end run. Adzuna entries are skipped with warnings if
 # credentials are absent; free sources and direct public ATS boards continue.
 free:
-	python -m app.main
-	python -m app.live_validate
-	python -m app.local_score
+	python -m app.free_run
 
 score:
 	python -m app.local_score
