@@ -1,0 +1,122 @@
+# Professional matching profile for the fork.
+# Deliberately excludes contact details, nationality, residence-permit details,
+# and other personal information because this repository is public.
+# For local use, copy this to profile.yaml (gitignored) and add any private
+# work-authorization context you want the evaluator to consider.
+
+identity:
+  name: "Candidate"
+  headline: "Recent Computer Science graduate — Backend / Full-Stack / Applied AI"
+  experience_level: "early-career"
+  location_region: "Central Europe"
+  location_constraints: >
+    Targeting junior/graduate/entry-level software roles across mainland
+    Europe. Open to on-site, hybrid, and Europe-compatible remote roles.
+    Work authorization must be verified per role and country; never assume
+    unrestricted authorization or visa sponsorship.
+  education:
+    - "BSc Computer Science, European university"
+
+target_roles:
+  primary:
+    - "Junior Backend Engineer"
+    - "Graduate Software Engineer"
+    - "Junior Software Engineer"
+    - "Junior Full-Stack Engineer"
+    - "Backend Developer"
+  secondary:
+    - "Applied AI Engineer"
+    - "ML Product Engineer"
+    - "AI-enabled Full-Stack Engineer"
+  avoid:
+    - "Senior"
+    - "Staff"
+    - "Principal"
+    - "Lead"
+    - "Engineering Manager"
+    - "Python-only roles with no meaningful overlap with the primary stack"
+
+core_stack:
+  strongest:
+    - "TypeScript"
+    - "JavaScript"
+    - "Node.js"
+    - "Express"
+    - "React"
+    - "PostgreSQL"
+    - "Supabase"
+  working_knowledge:
+    - "NestJS"
+    - "GraphQL"
+    - "Redis"
+    - "RabbitMQ"
+    - "Google Pub/Sub"
+    - "Docker"
+    - "Kubernetes"
+    - "REST APIs"
+    - "JWT/Auth"
+  secondary:
+    - "Python"
+    - "FastAPI"
+    - "Machine Learning"
+    - "Computer Vision"
+
+competencies:
+  backend_product_delivery:
+    summary: >
+      Built backend-heavy product workflows end-to-end, including data models,
+      authentication, authorization, role-based permissions, CRUD/API flows,
+      state transitions, and business matching logic.
+    evidence:
+      - >
+        Worked as the primary/sole developer on Reserva, an off-market real
+        estate product, implementing authentication, role-based permissions,
+        property submission/approval, buyer mandates, listing states and a
+        matching workflow using TypeScript, React, Node/Express,
+        Supabase/PostgreSQL.
+      - >
+        Worked directly from product/business requirements and converted
+        user journeys into database structures, APIs and application workflows.
+
+  fullstack_delivery:
+    summary: >
+      Comfortable delivering features across React frontends, Node/TypeScript
+      services, relational data, authentication and deployment-oriented
+      engineering concerns.
+    evidence:
+      - "Built multiple software projects across web, backend and data/AI domains."
+      - "Experience debugging production-style routing, authentication and API issues."
+
+  ai_ml:
+    summary: >
+      Academic/project exposure to machine learning, computer vision and
+      applied AI; strongest commercial experience remains software/backend.
+    evidence:
+      - "Selected academic research/project work in AI and computer vision."
+      - "Built AI-oriented software projects alongside conventional web systems."
+
+experience_timeline:
+  - company: "InspectOS / Remixwise"
+    dates: "2026"
+    title: "Software Engineering Intern"
+    domain: "PropTech / off-market real-estate software"
+    stack:
+      - "TypeScript"
+      - "React"
+      - "Node.js"
+      - "Express"
+      - "Supabase"
+      - "PostgreSQL"
+  - company: "Limelight Reinhold"
+    title: "Web Development Intern"
+    domain: "Web development"
+
+constraints:
+  - "Recent graduate: prioritize genuinely early-career roles."
+  - "Reject obvious senior/staff/principal/lead/manager positions."
+  - "Prefer TypeScript/Node/backend or TypeScript full-stack work."
+  - "Do not over-score jobs solely because they mention generic software skills."
+  - "Treat required years of professional experience as a meaningful constraint."
+  - "Check local-language requirements explicitly."
+  - "Check country/remote eligibility and work-authorization wording explicitly."
+  - "Fresh/live postings are more valuable than stale aggregator results."
