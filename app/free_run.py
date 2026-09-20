@@ -7,6 +7,8 @@ It fetches jobs, applies deterministic filters/dedup, validates candidate
 links, and calculates transparent local scores. No OpenAI/Ollama/cloud key
 is used.
 """
+import os
+
 from app import aggregator_clients, discover_companies, live_validate, local_score, main
 
 
@@ -14,6 +16,12 @@ def run() -> None:
     print("=== 1/3 Fetch + filter + dedup ===")
     companies = main.load_yaml_list("companies.yaml", "companies")
     aggregators = main.load_yaml_list("aggregators.yaml", "aggregators")
+    if not (os.environ.get("ADZUNA_APP_ID") and os.environ.get("ADZUNA_APP_KEY")):
+        before = len(aggregators)
+        aggregators = [a for a in aggregators if a.get("type") != "adzuna"]
+        skipped = before - len(aggregators)
+        if skipped:
+            print(f"Free mode: skipping {skipped} Adzuna search(es) because no Adzuna credentials are configured.")
     candidates = main.run(companies, aggregators)
     main.write_csv(candidates)
     print(f"Wrote {len(candidates)} new candidates to {main.OUTPUT_CSV}")
